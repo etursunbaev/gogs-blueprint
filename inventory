@@ -1,0 +1,5 @@
+---
+gbp ansible_host=192.168.5.97 postgre_gogs_pwd=datada
+
+[gbp]
+gbp

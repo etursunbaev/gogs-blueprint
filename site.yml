@@ -1,0 +1,89 @@
+---
+- hosts: gbp
+  remote_user: root
+  tasks:
+
+    - name: Install required packages
+      apt: 
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - git
+        - postgresql
+        - python-psycopg2
+#        - nginx
+    
+    - name: Downloads gogs binary
+      get_url:
+        url: https://cdn.gogs.io/0.11.86/gogs_0.11.86_linux_amd64.tar.gz
+        dest: /tmp/
+      register: download
+
+    - name: Add group "gogs"
+      group:
+        name: gogs
+        state: present
+
+    - name: Create user gogs
+      user:
+        name: gogs
+        system: yes
+        createhome: yes
+        home: /home/gogs
+        shell: /bin/bash
+        group: gogs
+
+    - name: Unarchive
+      unarchive:
+        src: /tmp/gogs_0.11.86_linux_amd64.tar.gz
+        dest: /home/gogs/
+        remote_src: yes
+        extra_opts: [--strip-components=1]
+      when: download.changed
+      become: true
+      become_user: gogs
+
+    - name: Create database gogs
+      postgresql_db:
+        name: gogs
+        state: present
+        encoding: UTF-8
+        template: template0
+      become: true
+      become_user: postgres
+
+    - name: Create database user gogs
+      postgresql_user:
+        db: gogs
+        name: gogs
+        password: "{{ postgre_gogs_pwd }}"
+        priv: ALL
+      become: true
+      become_user: postgres
+    
+    - name: Upload service file
+      template: 
+        src: gogs.service
+        dest: /lib/systemd/system
+      register: service
+    
+    - name: Create folders
+      file:
+        path: ~/custom/conf/
+        state: directory
+      become: true
+      become_user: gogs
+
+    - name: Upload config file
+      template:
+        src: app.ini
+        dest: ~/custom/conf/
+      become: true
+      become_user: gogs
+
+    - name: Start gogs
+      systemd:
+        name: gogs.service
+        state: restarted
+        enabled: yes
+        daemon-reload: yes
